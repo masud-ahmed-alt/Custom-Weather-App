@@ -5,25 +5,40 @@ import static com.arduino.weatherreport.Constant.APIKEY;
 import static com.arduino.weatherreport.Constant.BASE_URL;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.util.Log;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
+import com.google.android.material.snackbar.Snackbar;
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.MultiplePermissionsReport;
+import com.karumi.dexter.PermissionToken;
+import com.karumi.dexter.listener.PermissionRequest;
+import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.List;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -35,7 +50,9 @@ public class MainActivity extends AppCompatActivity {
     private Location location;
     private long location_key;
     private String url_main, TAG = "TAG";
+    private Snackbar snackbar;
 
+    private ProgressDialog dialog;
 
 
     private static final int LOCATION_ACCESS_CODE = 2051;
@@ -43,14 +60,34 @@ public class MainActivity extends AppCompatActivity {
     private boolean canGetLocation = true;
     private TextView temp,city,status,humidity,uvindexRate,sunrise,sunset,country;
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initView();
-        requestPermission();
+        dialog.show();
+        if(!checkPermissionStatus()){
+            requestPermission();
+        }else {
+            getLocation();
+        }
 
+    }
 
+    @SuppressLint("MissingPermission")
+    private void getLocation(){
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 10, location -> {
+            this.location = location;
+            updateUI();
+        });
+    }
+
+    private boolean checkPermissionStatus() {
+        return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     private void initView() {
@@ -62,49 +99,51 @@ public class MainActivity extends AppCompatActivity {
         sunrise = findViewById(R.id.sunriseTime);
         sunset = findViewById(R.id.sunsetTime);
         country = findViewById(R.id.country);
+        dialog = new ProgressDialog(this);
+        dialog.setMessage("Getting your location...");
 
     }
 
-    private boolean requestPermission() {
-        if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_DENIED &&
-                ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_DENIED){
-            ActivityCompat.requestPermissions(MainActivity.this,new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION},LOCATION_ACCESS_CODE);
-            requestPermission();
-            return false;
-        }else {
-            locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 10, location -> {
-               this.location = location;
-               updateUI();
-            });
-        }
-        return true;
-    }
+    private void requestPermission() {
+        Dexter.withContext(this)
+                .withPermissions(Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION)
+                .withListener(new MultiplePermissionsListener() {
+                    @Override
+                    public void onPermissionsChecked(MultiplePermissionsReport multiplePermissionsReport) {
+                        if(multiplePermissionsReport.areAllPermissionsGranted()){
+                            getLocation();
+                        }else {
+                            showSnackBarForPermission("Permission required... ");
+                        }
+                    }
+
+                    @Override
+                    public void onPermissionRationaleShouldBeShown(List<PermissionRequest> list, PermissionToken permissionToken) {
+                        permissionToken.continuePermissionRequest();
+                    }
+                })
+                .check();
 
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if(requestCode==LOCATION_ACCESS_CODE && grantResults[0]==PackageManager.PERMISSION_DENIED
-                && grantResults[1]==PackageManager.PERMISSION_DENIED){
-            finish();
-        }else {
-            updateUI();
-        }
     }
+
 
     private void updateUI() {
-        url_main = BASE_URL+"forecast.json?key="+APIKEY+"&q="+location.getLatitude()+","+location.getLongitude() + "&aqi=yes";
+        if (location != null){
+            lat = location.getLatitude();
+            lon = location.getLongitude();
+        }
+            url_main = BASE_URL + "forecast.json?key=" + APIKEY + "&q=" + lat + "," + lon + "&aqi=yes";
 
         RequestQueue queue = Volley.newRequestQueue(this);
         StringRequest request = new StringRequest(Request.Method.GET, url_main, response -> {
-            Log.d(TAG, "updateUI: "+url_main);
+            Log.d(TAG, "updateUI: " + url_main);
+            dialog.dismiss();
 
             try {
                 JSONObject jsonObject = new JSONObject(response);
                 JSONObject locationObject = jsonObject.getJSONObject("location");
-                city.setText(locationObject.getString("name")+" , "+locationObject.getString("region"));
+                city.setText(locationObject.getString("name") + " , " + locationObject.getString("region"));
                 country.setText(locationObject.getString("country"));
                 JSONObject current = jsonObject.getJSONObject("current");
                 JSONObject forecast = jsonObject.getJSONObject("forecast");
@@ -113,14 +152,15 @@ public class MainActivity extends AppCompatActivity {
                 JSONObject times = obj.getJSONObject("astro");
                 updateData(current);
                 updateTime(times);
-                Log.e(TAG, "updateUI: "+current );
+                Log.e(TAG, "updateUI: " + current);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
 
 
-        }, error ->{
-            Log.d(TAG, "updateUI: "+error.getMessage());
+        }, error -> {
+            Log.d(TAG, "updateUI: " + error.getMessage());
+            dialog.dismiss();
         });
         queue.add(request);
     }
@@ -136,5 +176,56 @@ public class MainActivity extends AppCompatActivity {
         uvindexRate.setText(current.getInt("uv")+" of 10");
     }
 
+    private void turnGPSOn(){
+        String provider = Settings.Secure.getString(getContentResolver(), Settings.Secure.LOCATION_PROVIDERS_ALLOWED);
 
+        if(!provider.contains("gps")){ //if gps is disabled
+            final Intent poke = new Intent();
+            poke.setClassName("com.android.settings", "com.android.settings.widget.SettingsAppWidgetProvider");
+            poke.addCategory(Intent.CATEGORY_ALTERNATIVE);
+            poke.setData(Uri.parse("3"));
+            sendBroadcast(poke);
+        }
+    }
+
+    private void showSnackBarForPermission(String msg){
+        LinearLayout mainView = findViewById(R.id.mainView);
+        snackbar = Snackbar.make(mainView,msg,Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction("Enable", v -> {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            Uri uri = Uri.fromParts("package", getPackageName(), null);
+            intent.setData(uri);
+            startActivity(intent);
+        });
+        snackbar.show();
+    }
+
+    private void showSnackBarForGPS(String msg){
+        LinearLayout mainView = findViewById(R.id.mainView);
+        snackbar = Snackbar.make(mainView,msg,Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction("Enable", v -> {
+            startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        });
+        snackbar.show();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        LocationManager manager = (LocationManager) getSystemService( Context.LOCATION_SERVICE );
+        if ( !manager.isProviderEnabled( LocationManager.GPS_PROVIDER ) ) {
+            showSnackBarForGPS("Please Enable GPS");
+        }else {
+            updateUI();
+        }
+
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        dialog.show();
+        updateUI();
+    }
 }
