@@ -1,22 +1,20 @@
 package com.arduino.weatherreport;
 
-import static com.arduino.weatherreport.Constant.APIKEY;
-import static com.arduino.weatherreport.Constant.CURR_REP;
-import static com.arduino.weatherreport.Constant.GET_LOC;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
+import static com.arduino.weatherreport.Constant.APIKEY;
+import static com.arduino.weatherreport.Constant.BASE_URL;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -43,7 +41,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int LOCATION_ACCESS_CODE = 2051;
     private boolean isGPSEnabled = false;
     private boolean canGetLocation = true;
-    private TextView temp,city,status,humidity,uvindexRate,sunrise,sunset;
+    private TextView temp,city,status,humidity,uvindexRate,sunrise,sunset,country;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
         uvindexRate = findViewById(R.id.uvindexRate);
         sunrise = findViewById(R.id.sunriseTime);
         sunset = findViewById(R.id.sunsetTime);
+        country = findViewById(R.id.country);
 
     }
 
@@ -96,54 +95,46 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateUI() {
-        url_main = GET_LOC+location.getLatitude()+","+location.getLongitude();
-        Networking net = new Networking();
-        String resp = net.get(this, url_main);
-        Log.d(TAG, "updateUI: "+url_main);
+        url_main = BASE_URL+"forecast.json?key="+APIKEY+"&q="+location.getLatitude()+","+location.getLongitude() + "&aqi=yes";
 
         RequestQueue queue = Volley.newRequestQueue(this);
         StringRequest request = new StringRequest(Request.Method.GET, url_main, response -> {
-            Log.d(TAG, "updateUI: "+response);
-            try {
-                JSONObject array = new JSONObject(response);
-                location_key = array.getInt("Key");
-                String local_name = array.getString("LocalizedName");
-                updateData(location_key);
+            Log.d(TAG, "updateUI: "+url_main);
 
-                JSONObject o3 = array.getJSONObject("Country");
-                city.setText(array.getString("LocalizedName")+" , "+o3.getString("ID"));
-            }catch (JSONException e){
+            try {
+                JSONObject jsonObject = new JSONObject(response);
+                JSONObject locationObject = jsonObject.getJSONObject("location");
+                city.setText(locationObject.getString("name")+" , "+locationObject.getString("region"));
+                country.setText(locationObject.getString("country"));
+                JSONObject current = jsonObject.getJSONObject("current");
+                JSONObject forecast = jsonObject.getJSONObject("forecast");
+                JSONArray forecastArray = forecast.getJSONArray("forecastday");
+                JSONObject obj = forecastArray.getJSONObject(0);
+                JSONObject times = obj.getJSONObject("astro");
+                updateData(current);
+                updateTime(times);
+                Log.e(TAG, "updateUI: "+current );
+            } catch (JSONException e) {
                 e.printStackTrace();
             }
+
+
         }, error ->{
             Log.d(TAG, "updateUI: "+error.getMessage());
         });
         queue.add(request);
     }
 
-    private void updateData(long location_key) {
-        url_main = CURR_REP+location_key+"?apikey="+APIKEY;
-
-        RequestQueue queue = Volley.newRequestQueue(this);
-        StringRequest request = new StringRequest(Request.Method.GET,url_main,response -> {
-            Log.d(TAG, "updateData: "+response);
-            try {
-                JSONArray array = new JSONArray(response);
-                JSONObject object = array.getJSONObject(0);
-                Log.d(TAG, "updateData: "+object);
-                JSONObject o1 = object.getJSONObject("Temperature");
-                JSONObject o2 = o1.getJSONObject("Metric");
-                double t = o2.getDouble("Value");
-                temp.setText(String.valueOf((int)Math.ceil(t)));
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-        },error -> {
-            Log.d(TAG, "updateData: "+error.getMessage());
-        });
-
-        queue.add(request);
+    private void updateTime(JSONObject times) throws JSONException{
+        sunrise.setText(times.getString("sunrise"));
+        sunset.setText(times.getString("sunset"));
     }
+
+    private void updateData(JSONObject current) throws JSONException{
+        temp.setText(String.valueOf((int)(Math.ceil(current.getDouble("temp_c")))));
+        humidity.setText(current.getInt("humidity")+"%");
+        uvindexRate.setText(current.getInt("uv")+" of 10");
+    }
+
 
 }
