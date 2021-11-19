@@ -1,5 +1,7 @@
 package com.arduino.weatherreport;
 
+import static com.arduino.weatherreport.Constant.APIKEY;
+import static com.arduino.weatherreport.Constant.CURR_REP;
 import static com.arduino.weatherreport.Constant.GET_LOC;
 
 import androidx.annotation.NonNull;
@@ -14,6 +16,16 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
+
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -24,26 +36,33 @@ public class MainActivity extends AppCompatActivity {
     private LocationManager locationManager;
     private Location location;
     private long location_key;
-    private String url_main;
+    private String url_main, TAG = "TAG";
+
 
 
     private static final int LOCATION_ACCESS_CODE = 2051;
     private boolean isGPSEnabled = false;
     private boolean canGetLocation = true;
+    private TextView temp,city,status,humidity,uvindexRate,sunrise,sunset;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        initView();
+        requestPermission();
 
 
-        if(location!=null && requestPermission()) {
-            Networking net = new Networking();
-            String resp = net.get(this, url_main);
-            Log.e("TAG", "onCreate: " + resp);
-        }else {
-            Log.d("TAG", "onCreate: Null Location");
-        }
+    }
+
+    private void initView() {
+        temp = findViewById(R.id.temp);
+        city = findViewById(R.id.city);
+        status = findViewById(R.id.status);
+        humidity = findViewById(R.id.humidityRate);
+        uvindexRate = findViewById(R.id.uvindexRate);
+        sunrise = findViewById(R.id.sunriseTime);
+        sunset = findViewById(R.id.sunsetTime);
 
     }
 
@@ -57,11 +76,8 @@ public class MainActivity extends AppCompatActivity {
         }else {
             locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 10, location -> {
-                MainActivity.this.location = location;
-                Log.d("LOCATION", "onLocationChanged: LONG"+location.getLongitude()+" LAT"+location.getLatitude());
-
-                Networking networking = new Networking();
-                url_main = GET_LOC+location.getLongitude()+","+location.getLongitude();
+               this.location = location;
+               updateUI();
             });
         }
         return true;
@@ -71,11 +87,63 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if(requestCode==LOCATION_ACCESS_CODE && grantResults[0]==PackageManager.PERMISSION_GRANTED && grantResults[1]==PackageManager.PERMISSION_GRANTED){
-
+        if(requestCode==LOCATION_ACCESS_CODE && grantResults[0]==PackageManager.PERMISSION_DENIED
+                && grantResults[1]==PackageManager.PERMISSION_DENIED){
+            finish();
+        }else {
+            updateUI();
         }
     }
 
-    LocationListener locationListener = location -> MainActivity.this.location = location;
+    private void updateUI() {
+        url_main = GET_LOC+location.getLatitude()+","+location.getLongitude();
+        Networking net = new Networking();
+        String resp = net.get(this, url_main);
+        Log.d(TAG, "updateUI: "+url_main);
+
+        RequestQueue queue = Volley.newRequestQueue(this);
+        StringRequest request = new StringRequest(Request.Method.GET, url_main, response -> {
+            Log.d(TAG, "updateUI: "+response);
+            try {
+                JSONObject array = new JSONObject(response);
+                location_key = array.getInt("Key");
+                String local_name = array.getString("LocalizedName");
+                updateData(location_key);
+
+                JSONObject o3 = array.getJSONObject("Country");
+                city.setText(array.getString("LocalizedName")+" , "+o3.getString("ID"));
+            }catch (JSONException e){
+                e.printStackTrace();
+            }
+        }, error ->{
+            Log.d(TAG, "updateUI: "+error.getMessage());
+        });
+        queue.add(request);
+    }
+
+    private void updateData(long location_key) {
+        url_main = CURR_REP+location_key+"?apikey="+APIKEY;
+
+        RequestQueue queue = Volley.newRequestQueue(this);
+        StringRequest request = new StringRequest(Request.Method.GET,url_main,response -> {
+            Log.d(TAG, "updateData: "+response);
+            try {
+                JSONArray array = new JSONArray(response);
+                JSONObject object = array.getJSONObject(0);
+                Log.d(TAG, "updateData: "+object);
+                JSONObject o1 = object.getJSONObject("Temperature");
+                JSONObject o2 = o1.getJSONObject("Metric");
+                double t = o2.getDouble("Value");
+                temp.setText(String.valueOf((int)Math.ceil(t)));
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+        },error -> {
+            Log.d(TAG, "updateData: "+error.getMessage());
+        });
+
+        queue.add(request);
+    }
 
 }
