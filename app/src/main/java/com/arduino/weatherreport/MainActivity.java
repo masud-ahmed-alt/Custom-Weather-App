@@ -67,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int LOCATION_ACCESS_CODE = 2051;
     private boolean isGPSEnabled = false;
     private boolean canGetLocation = true;
-    private TextView temp,city,status,humidity,uvindexRate,sunrise,sunset,country;
+    private TextView temp, city, status, humidity, uvindexRate, sunrise, sunset, country;
 
 
     @Override
@@ -78,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
 
         initView();
         dialog.show();
-        if(!checkPermissionStatus()){
+        if (!checkPermissionStatus()) {
             requestPermission();
         }else {
             getLocation();
@@ -86,9 +86,12 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    @SuppressLint("MissingPermission")
-    private void getLocation(){
+    private void getLocation() {
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            checkPermissionStatus();
+            return;
+        }
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 10, location -> {
             this.location = location;
             SharedPreferences.Editor editor = preferences.edit();
@@ -137,8 +140,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 })
                 .check();
-
-
     }
 
 
