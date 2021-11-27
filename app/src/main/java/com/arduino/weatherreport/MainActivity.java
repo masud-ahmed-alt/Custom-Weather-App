@@ -38,7 +38,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.sql.Timestamp;
+import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -129,6 +132,7 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void updateUI() {
+        Timestamp timestamp= new Timestamp(System.currentTimeMillis());
         if (location != null){
             lat = location.getLatitude();
             lon = location.getLongitude();
@@ -137,7 +141,6 @@ public class MainActivity extends AppCompatActivity {
 
         RequestQueue queue = Volley.newRequestQueue(this);
         StringRequest request = new StringRequest(Request.Method.GET, url_main, response -> {
-            Log.d(TAG, "updateUI: " + url_main);
             dialog.dismiss();
 
             try {
@@ -150,8 +153,39 @@ public class MainActivity extends AppCompatActivity {
                 JSONArray forecastArray = forecast.getJSONArray("forecastday");
                 JSONObject obj = forecastArray.getJSONObject(0);
                 JSONObject times = obj.getJSONObject("astro");
+                JSONArray hour = obj.getJSONArray("hour");
+                for(int i=0; i<hour.length(); i++){
+
+                    JSONObject timeObj = hour.getJSONObject(i);
+                    long time_epoch = timeObj.getLong("time_epoch");
+                    JSONObject timeObj_1;
+
+//                    String time = timeObj.getString("time");
+//                    Date date =new Date(time);
+//                    Log.e(TAG, "updateUI: "+date);
+//                    if(i<23) {
+//                         timeObj_1 = hour.getJSONObject(i + 1);
+//                    }else {
+//                        timeObj_1 = hour.getJSONObject(1);
+//                    }
+//                    long time_epoch_1 = timeObj_1.getLong("time_epoch");
+//                    Log.d(TAG, "updateUI: "+time_epoch+" curr  = "+System.currentTimeMillis());
+//                    if (time_epoch <= (timestamp.getTime())) {
+//                        if(time_epoch_1 >= (timestamp.getTime())){
+//                            JSONObject obk = timeObj.getJSONObject("condition");
+//                            status.setText(obk.getString("text"));
+//                        }
+//
+//                    }else {
+//
+//                    }
+
+                }
+
+                Log.d(TAG, "updateUI: "+timestamp.getTime()+"   : "+hour.get(0));
                 updateData(current);
                 updateTime(times);
+
                 Log.e(TAG, "updateUI: " + current);
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -168,6 +202,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateTime(JSONObject times) throws JSONException{
         sunrise.setText(times.getString("sunrise"));
         sunset.setText(times.getString("sunset"));
+
     }
 
     private void updateData(JSONObject current) throws JSONException{
@@ -176,17 +211,6 @@ public class MainActivity extends AppCompatActivity {
         uvindexRate.setText(current.getInt("uv")+" of 10");
     }
 
-    private void turnGPSOn(){
-        String provider = Settings.Secure.getString(getContentResolver(), Settings.Secure.LOCATION_PROVIDERS_ALLOWED);
-
-        if(!provider.contains("gps")){ //if gps is disabled
-            final Intent poke = new Intent();
-            poke.setClassName("com.android.settings", "com.android.settings.widget.SettingsAppWidgetProvider");
-            poke.addCategory(Intent.CATEGORY_ALTERNATIVE);
-            poke.setData(Uri.parse("3"));
-            sendBroadcast(poke);
-        }
-    }
 
     private void showSnackBarForPermission(String msg){
         LinearLayout mainView = findViewById(R.id.mainView);
