@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Weather Report</string>
+    <string name="hint_wind">Rainy to partly cloudy.\nWinds WSW at 10 to 35 km/h</string>
 </resources>
