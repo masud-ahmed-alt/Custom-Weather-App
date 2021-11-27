@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Weather Report</string>
     <string name="hint_wind">Rainy to partly cloudy.\nWinds WSW at 10 to 35 km/h</string>
+    <string name="appwidget_text">EXAMPLE</string>
+    <string name="add_widget">Add widget</string>
+    <string name="app_widget_description">This is an app widget description</string>
 </resources>

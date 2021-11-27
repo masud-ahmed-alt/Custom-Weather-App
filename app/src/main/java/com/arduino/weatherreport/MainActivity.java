@@ -4,11 +4,14 @@ package com.arduino.weatherreport;
 import static com.arduino.weatherreport.Constant.APIKEY;
 import static com.arduino.weatherreport.Constant.BASE_URL;
 
+import static java.lang.Integer.parseInt;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
@@ -38,13 +41,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.sql.Array;
 import java.sql.Timestamp;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 
 public class MainActivity extends AppCompatActivity {
+    private SharedPreferences preferences;
     private static final long MIN_TIME_BW_UPDATES = 1;
     private static final float MIN_DISTANCE_CHANGE_FOR_UPDATES = 10;
     private double lon = 91.736237;
@@ -69,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         initView();
         dialog.show();
         if(!checkPermissionStatus()){
@@ -84,6 +91,10 @@ public class MainActivity extends AppCompatActivity {
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 10, location -> {
             this.location = location;
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putLong("lat", Double.doubleToRawLongBits(location.getLatitude()));
+            editor.putLong("lon", Double.doubleToRawLongBits(location.getLongitude()));
+            editor.apply();
             updateUI();
         });
     }
@@ -131,11 +142,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private void updateUI() {
-        Timestamp timestamp= new Timestamp(System.currentTimeMillis());
+    public void updateUI() {
         if (location != null){
             lat = location.getLatitude();
             lon = location.getLongitude();
+        }else {
+            getLocation();
         }
             url_main = BASE_URL + "forecast.json?key=" + APIKEY + "&q=" + lat + "," + lon + "&aqi=yes";
 
@@ -154,39 +166,40 @@ public class MainActivity extends AppCompatActivity {
                 JSONObject obj = forecastArray.getJSONObject(0);
                 JSONObject times = obj.getJSONObject("astro");
                 JSONArray hour = obj.getJSONArray("hour");
+                long[] allTimes = new long[hour.length()];
+                JSONObject[] conditions = new JSONObject[hour.length()];
                 for(int i=0; i<hour.length(); i++){
-
-                    JSONObject timeObj = hour.getJSONObject(i);
+                    JSONObject timeObj =  hour.getJSONObject(i);
                     long time_epoch = timeObj.getLong("time_epoch");
-                    JSONObject timeObj_1;
+                    long date = parseInt(String.valueOf(new Date().getTime()/1000));
 
-//                    String time = timeObj.getString("time");
-//                    Date date =new Date(time);
-//                    Log.e(TAG, "updateUI: "+date);
-//                    if(i<23) {
-//                         timeObj_1 = hour.getJSONObject(i + 1);
-//                    }else {
-//                        timeObj_1 = hour.getJSONObject(1);
-//                    }
-//                    long time_epoch_1 = timeObj_1.getLong("time_epoch");
-//                    Log.d(TAG, "updateUI: "+time_epoch+" curr  = "+System.currentTimeMillis());
-//                    if (time_epoch <= (timestamp.getTime())) {
-//                        if(time_epoch_1 >= (timestamp.getTime())){
-//                            JSONObject obk = timeObj.getJSONObject("condition");
-//                            status.setText(obk.getString("text"));
-//                        }
-//
-//                    }else {
-//
-//                    }
+                    allTimes[i] = date-time_epoch;
+                    conditions[i]  = hour.getJSONObject(i);
+
 
                 }
 
-                Log.d(TAG, "updateUI: "+timestamp.getTime()+"   : "+hour.get(0));
-                updateData(current);
-                updateTime(times);
+                for(int i=0; i<hour.length(); i++){
+                    if(allTimes[i]<0){
+                        allTimes[i] = allTimes[i]*(-1);
+                    }
+                }
+                int index = 0;
+                long min = allTimes[index];
 
-                Log.e(TAG, "updateUI: " + current);
+                for (int j = 1; j < allTimes.length; j++){
+                    if (allTimes[j] <= min){
+                        min = allTimes[j];
+                        index = j;
+                    }
+                }
+
+                status.setText(conditions[index].getJSONObject("condition").getString("text"));
+                temp.setText(String.valueOf((int)(Math.ceil(current.getDouble("temp_c")))));
+                humidity.setText(current.getInt("humidity")+"%");
+                uvindexRate.setText(current.getInt("uv")+" of 10");
+                sunrise.setText(times.getString("sunrise"));
+                sunset.setText(times.getString("sunset"));
             } catch (JSONException e) {
                 e.printStackTrace();
             }
@@ -197,18 +210,6 @@ public class MainActivity extends AppCompatActivity {
             dialog.dismiss();
         });
         queue.add(request);
-    }
-
-    private void updateTime(JSONObject times) throws JSONException{
-        sunrise.setText(times.getString("sunrise"));
-        sunset.setText(times.getString("sunset"));
-
-    }
-
-    private void updateData(JSONObject current) throws JSONException{
-        temp.setText(String.valueOf((int)(Math.ceil(current.getDouble("temp_c")))));
-        humidity.setText(current.getInt("humidity")+"%");
-        uvindexRate.setText(current.getInt("uv")+" of 10");
     }
 
 
@@ -237,12 +238,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
+        preferences = getSharedPreferences(MainActivity.this.getApplicationContext().getPackageName(),MODE_PRIVATE);
         LocationManager manager = (LocationManager) getSystemService( Context.LOCATION_SERVICE );
         if ( !manager.isProviderEnabled( LocationManager.GPS_PROVIDER ) ) {
             showSnackBarForGPS("Please Enable GPS");
         }else {
             updateUI();
         }
+        lon = Double.longBitsToDouble(preferences.getLong("lon",Double.doubleToRawLongBits(lon)));
+        lat = Double.longBitsToDouble(preferences.getLong("lat",Double.doubleToRawLongBits(lat)));
 
     }
 
