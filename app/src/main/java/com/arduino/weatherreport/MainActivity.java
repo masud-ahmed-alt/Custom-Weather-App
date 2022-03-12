@@ -158,6 +158,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 JSONObject jsonObject = new JSONObject(response);
                 JSONObject locationObject = jsonObject.getJSONObject("location");
+                // Get city name using another API
                 city.setText(locationObject.getString("name") + " , " + locationObject.getString("region"));
                 country.setText(locationObject.getString("country"));
                 JSONObject current = jsonObject.getJSONObject("current");
@@ -175,8 +176,6 @@ public class MainActivity extends AppCompatActivity {
 
                     allTimes[i] = date-time_epoch;
                     conditions[i]  = hour.getJSONObject(i);
-
-
                 }
 
                 for(int i=0; i<hour.length(); i++){
