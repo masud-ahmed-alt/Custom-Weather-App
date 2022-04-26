@@ -50,6 +50,7 @@ public class HomeScreen extends AppWidgetProvider {
     private static LocationManager locationManager;
     private static Location locationV;
     private static String url_main, TAG = "TAG";
+
     private static RemoteViews remoteViews;
 
 
